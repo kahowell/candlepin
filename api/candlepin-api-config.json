@@ -1,0 +1,8 @@
+{
+  "modelPackage": "org.candlepin.api.v3.model",
+  "apiPackage": "org.candlepin.api.v3.resources",
+  "invokerPackage": "org.candlepin",
+  "groupId": "org.candlepin",
+  "artifactId": "rhsm-conduit",
+  "java8": true
+}

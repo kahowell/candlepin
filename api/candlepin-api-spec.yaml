@@ -1,0 +1,1256 @@
+openapi: "3.0.2"
+info:
+  title: "candlepin-rpc-api"
+  description: "RPC-ish interface for candlepin."
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8080/api/v1
+
+paths:
+  /operations/register:
+    post:
+      summary: "Registers a new system to the subscription management service."
+      operationId: register
+      security:
+        - basicAuth: []
+      parameters:
+        - name: name
+          in: query
+          description: Sets the name of the system to register. This defaults to the hostname.
+          schema:
+            type: string
+
+        - name: consumerid
+          in: query
+          description: References an existing system inventory ID to resume using a previous registration for this system. The ID is used as an inventory number for the system in the subscription management service database. If the system's identity is lost or corrupted, this option allows it to resume using its previous identity and subscriptions.
+          schema:
+            type: string
+
+        - name: activationkey
+          in: query
+          description: Gives a comma-separated list of product keys to use to redeem or apply specific subscriptions to the system. This is used for preconfigured systems which may already have products installed. Activation keys are issued by an on-premise subscription management service, such as Subscription Asset Manager. When the activationkey option is used, it is not necessary to use the username and password options, because the authentication information is implicit in the activation key.
+          schema:
+            type: array
+            items:
+              type: string
+
+        - name: autoattach
+          in: query
+          description:
+            Automatically attaches compatible subscriptions to this system.
+          schema:
+            type: boolean
+
+        - name: servicelevel
+          in: query
+          description: Sets the preferred service level to use with subscriptions added to the system. Service levels are commonly premium, standard, and none, though other levels may be available depending on the product and the contract.
+          schema:
+            type: string
+
+        - name: org
+          in: query
+          description: Assigns the system to an organization. Infrastructures which are managed on-site may be multi-tenant, meaning that there are multiple organizations within one customer unit. A system may be assigned manually to one of these organizations.  When a system is registered with the Customer Portal, this is not required. When a system is registered with an on-premise application such as Subscription Asset Manager, this argument is required, unless there is only a single organization configured.
+          schema:
+            type: string
+
+        - name: environment
+          in: query
+          description: Registers the system to an environment within an organization.
+          schema:
+            type: string
+
+        - name: release
+          in: query
+          description: Release version to use during registration
+          schema:
+            type: string
+      requestBody:
+        description: system profile, including facts and installed products
+        content:
+          application/vnd.api+json:
+            schema:
+              $ref: '#/components/schemas/SystemProfile'
+      responses:
+        # Could be 202 Accepted if we go async.
+        '200':
+          $ref: '#/components/responses/SyncResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/ResourceNotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      tags: [registration]
+
+  /operations/unregister:
+    post:
+      summary: "Removes a system's subscriptions and removes it from the subscription management service."
+      operationId: unregister
+      security:
+        - certAuth: []
+      parameters:
+        - name: consumer_id
+          in: query
+          schema:
+            type: string
+      responses:
+        # Could be 202 Accepted if we go async.
+        '202':
+          description: "The request to unregister was successful."
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/ResourceNotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      tags: [registration]
+
+  /operations/autoattach:
+    post:
+      summary: "Automatically attaches the best-matched compatible subscription or subscriptions to the system."
+      operationId: autoattach
+      security:
+        - certAuth: []
+      parameters:
+        - name: consumer_id
+          in: query
+          schema:
+            type: string
+
+        - name: servicelevel
+          in: query
+          description: Sets the preferred service level to use with subscriptions automatically attached to the system. Service levels are commonly premium, standard, and none, though other levels may be available depending on the product and the contract.
+          schema:
+            type: string
+      responses:
+        # Could be 202 Accepted if we go async.
+        '200':
+          $ref: '#/components/responses/SyncResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/ResourceNotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      tags: [subscriptions]
+
+  /operations/attach:
+    post:
+      summary: "Attaches one or more subscription pools to the system."
+      operationId: attach
+      security:
+        - certAuth: []
+      parameters:
+        - name: consumer_id
+          in: query
+          schema:
+            type: string
+
+        - name: pool
+          in: query
+          description: Gives the ID for the subscriptions pool (collection of products) to attach to the system.
+          schema:
+            type: array
+            items:
+              type: string
+
+        - name: quantity
+          in: query
+          description: Attaches a specified number of subscriptions to the system. Subscriptions may have certain limits on them, like the number of sockets on the system or the number of allowed virtual guests. It
+            is possible to attach multiple subscriptions (or stacking subscriptions) to cover the number of sockets, guests, or other characteristics. May not be used with an auto-attach.
+          schema:
+            type: integer
+            format: int32
+      responses:
+        # Could be 202 Accepted if we go async.
+        '200':
+          $ref: '#/components/responses/SyncResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/ResourceNotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      tags: [subscriptions]
+
+  /operations/remove:
+    post:
+      summary: "Removes a subscription from the system."
+      operationId: remove
+      security:
+        - certAuth: []
+      parameters:
+        - name: consumer_id
+          in: query
+          schema:
+            type: string
+
+        - name: serial
+          in: query
+          description: Gives the serial number of the subscription certificate for the specific product to remove from the system. Subscription certificates attached to a system are in a certificate, in /etc/pki/entitlement/<serial_number>.pem.
+          schema:
+            type: array
+            items:
+              type: string
+
+        - name: pool
+          in: query
+          description: Removes all subscription certificates for the specified pool id from the system.
+          schema:
+            type: array
+            items:
+              type: string
+
+        - name: all
+          in: query
+          description:  Removes all of the subscriptions attached to a system.
+          schema:
+            type: boolean
+      responses:
+        # Could be 202 Accepted if we go async.
+        '200':
+          $ref: '#/components/responses/SyncResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/ResourceNotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      tags: [subscriptions]
+
+  /operations/list_releases:
+    get:
+      summary: "Lists the available OS versions and the currently set release version (if any)."
+      operationId: listReleases
+      security:
+        - certAuth: []
+      parameters:
+        - name: consumer_id
+          in: query
+          schema:
+            type: string
+      responses:
+        # Could be 202 Accepted if we go async.
+        '200':
+          $ref: '#/components/responses/ListReleasesResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/ResourceNotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      tags: [profile]
+
+  /operations/set_release:
+    post:
+      summary: "Sets a sticky OS version to use when installing or updating packages."
+      operationId: setRelease
+      security:
+        - certAuth: []
+      parameters:
+        - name: consumer_id
+          in: query
+          schema:
+            type: string
+
+        - name: release
+          in: query
+          description: Sets the minor (Y-stream) release version to use, such as 6.3.
+          schema:
+            type: string
+      responses:
+        # Could be 202 Accepted if we go async.
+        '202':
+          description: "The request to set release was successful."
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/ResourceNotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      tags: [profile]
+
+  /operations/list_servicelevels:
+    get:
+      summary: "Displays the current configured service level preference for products installed on the system."
+      operationId: getServiceLevel
+      security:
+        - basicAuth: []
+        - certAuth: []
+      parameters:
+        - name: consumer_id
+          in: query
+          schema:
+            type: string
+      responses:
+        # Could be 202 Accepted if we go async.
+        '200':
+          $ref: '#/components/responses/ListServiceLevelsResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/ResourceNotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      tags: [profile]
+
+  /operations/set_servicelevel:
+    post:
+      summary: "Set a service-level preference for this system."
+      operationId: setServiceLevel
+      security:
+        - certAuth: []
+      parameters:
+        - name: consumer_id
+          in: query
+          schema:
+            type: string
+
+        - name: release
+          in: query
+          description: Sets the minor (Y-stream) release version to use, such as 6.3.
+          schema:
+            type: string
+      responses:
+        # Could be 202 Accepted if we go async.
+        '202':
+          description: "Service level set successfully."
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/ResourceNotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      tags: [profile]
+
+  /operations/redeem:
+    post:
+      summary: "Redeems subscription for systems purchased from third-party vendors that include a subscription."
+      operationId: redeem
+      security:
+        - certAuth: []
+      parameters:
+        - name: consumer_id
+          in: query
+          schema:
+            type: string
+        - name: email
+          in: query
+          description: "Gives the email account to send the redemption notification message to."
+          schema:
+            type: string
+        - name: locale
+          in: query
+          description: "Sets the locale to use for the message. If none is given, then it defaults to the local system's locale."
+          schema:
+            type: string
+        - name: org
+          in: query
+          description: "Identifies the organization which issued the subscription being redeemed."
+          schema:
+            type: string
+      responses:
+        '202':
+          description: 'Subscription is being redeemed (async)'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/ResourceNotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      tags: [subscriptions]
+
+  /operations/list_subscriptions:
+    get:
+      summary: "Lists all of the subscriptions that are compatible with a system."
+      operationId: listSubscriptions
+      security:
+        - certAuth: []
+      parameters:
+        - name: consumer_id
+          in: query
+          schema:
+            type: string
+
+        - name: afterdate
+          in: query
+          description: "Shows pools that are active on or after the given date."
+          schema:
+            type: string
+
+        - name: all
+          in: query
+          description: Lists all possible subscriptions that have been purchased, even if they don't match the architecture of the system.
+          schema:
+            type: boolean
+
+        - name: available
+          in: query
+          description: Lists available subscriptions which are not yet attached to the system.
+          schema:
+            type: boolean
+
+        - name: consumed
+          in: query
+          description: Lists all of the subscriptions currently attached to the system.
+          schema:
+            type: boolean
+
+        - name: ondate
+          in: query
+          description: Sets the date to use to search for active and available subscriptions. The default (if not explicitly passed) is today's date; using a later date looks for subscriptions which will be active
+            then. This is only used with the --available option.
+          schema:
+            type: string
+
+        - name: nooverlap
+          in: query
+          description: Shows pools which provide products that are not already covered.
+          schema:
+            type: boolean
+
+        - name: matchinstalled
+          in: query
+          description: Shows only subscriptions matching products that are currently installed; only used with --available option.
+          schema:
+            type: boolean
+
+        - name: matches
+          in: query
+          description: Limits to only subscriptions or products which contain SEARCH in the subscription or product information, varying with the list requested and the server version. SEARCH may contain the wildcards ? or * to match a single character or zero or more characters, respectively. The wildcard characters may be escaped with a backslash to represent a literal question mark or asterisk. Likewise, to represent a backslash, it must be escaped with another backslash.
+          schema:
+            type: string
+      responses:
+        # Could be 202 Accepted if we go async.
+        '200':
+          $ref: '#/components/responses/ListPoolsResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/ResourceNotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      tags: [subscriptions]
+
+  /operations/list_pool_ids:
+    get:
+      summary: "Lists all of the subscriptions that are compatible with a system."
+      operationId: listPoolIds
+      security:
+        - certAuth: []
+      parameters:
+        - name: consumer_id
+          in: query
+          schema:
+            type: string
+
+        - name: afterdate
+          in: query
+          description: "Shows pools that are active on or after the given date."
+          schema:
+            type: string
+
+        - name: all
+          in: query
+          description: Lists all possible subscriptions that have been purchased, even if they don't match the architecture of the system.
+          schema:
+            type: boolean
+
+        - name: available
+          in: query
+          description: Lists available subscriptions which are not yet attached to the system.
+          schema:
+            type: boolean
+
+        - name: consumed
+          in: query
+          description: Lists all of the subscriptions currently attached to the system.
+          schema:
+            type: boolean
+
+        - name: ondate
+          in: query
+          description: Sets the date to use to search for active and available subscriptions. The default (if not explicitly passed) is today's date; using a later date looks for subscriptions which will be active
+            then. This is only used with the --available option.
+          schema:
+            type: string
+
+        - name: nooverlap
+          in: query
+          description: Shows pools which provide products that are not already covered.
+          schema:
+            type: boolean
+
+        - name: matchinstalled
+          in: query
+          description: Shows only subscriptions matching products that are currently installed; only used with --available option.
+          schema:
+            type: boolean
+
+        - name: matches
+          in: query
+          description: Limits to only subscriptions or products which contain SEARCH in the subscription or product information, varying with the list requested and the server version. SEARCH may contain the wildcards ? or * to match a single character or zero or more characters, respectively. The wildcard characters may be escaped with a backslash to represent a literal question mark or asterisk. Likewise, to represent a backslash, it must be escaped with another backslash.
+          schema:
+            type: string
+      responses:
+        # Could be 202 Accepted if we go async.
+        '200':
+          $ref: '#/components/responses/ListPoolIdsResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/ResourceNotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      tags: [subscriptions]
+
+  /operations/refresh:
+    get:
+      summary: "Pulls the latest subscription data from the server"
+      operationId: refresh
+      security:
+        - certAuth: []
+      parameters:
+        - name: consumer_id
+          in: query
+          schema:
+            type: string
+
+        - name: last_state_token
+          in: query
+          description: Opaque token that server uses to track whether it needs to send updated state.
+          schema:
+            type: string
+      responses:
+        # Could be 202 Accepted if we go async.
+        '200':
+          $ref: '#/components/responses/SyncResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/ResourceNotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      tags: [subscriptions]
+
+  /operations/list_environments:
+    get:
+      summary: "Lists all of the environments that have been configured for an organization."
+      operationId: listEnvironments
+      security:
+        - basicAuth: []
+        - certAuth: []
+      parameters:
+        - name: org
+          in: query
+          description: Identifies the organization for which to list the configured environments.
+          schema:
+            type: string
+      responses:
+        # Could be 202 Accepted if we go async.
+        '200':
+          $ref: '#/components/responses/ListEnvironmentsResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/ResourceNotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      tags: [environment]
+
+  /operations/list_repos:
+    get:
+      summary: "Lists all of the repositories that are available to a system."
+      operationId: listRepos
+      security:
+        - certAuth: []
+      parameters:
+        - name: consumer_id
+          in: query
+          schema:
+            type: string
+        - name: enabled
+          in: query
+          description: Lists all of the enabled repositories that are provided by the content service used by the system.
+          schema:
+            type: boolean
+        - name: disabled
+          in: query
+          description: Lists all of the disabled repositories that are provided by the content service used by the system.
+          schema:
+            type: boolean
+      responses:
+        # Could be 202 Accepted if we go async.
+        '200':
+          $ref: '#/components/responses/ListReposResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/ResourceNotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      tags: [content]
+
+  /operations/update_repos:
+    post:
+      summary: "Enable or disable repositories."
+      operationId: updateRepos
+      security:
+        - certAuth: []
+      parameters:
+        - name: consumer_id
+          in: query
+          schema:
+            type: string
+        - name: enable
+          in: query
+          description: Enables the specified repository, which is made available by the content sources identified in the system subscriptions.
+          schema:
+            type: array
+            items:
+              type: string
+        - name: disable
+          in: query
+          description: Disables the specified repository, which is made available by the content sources identified in the system subscriptions.
+          schema:
+            type: array
+            items:
+              type: string
+      responses:
+        # Could be 202 Accepted if we go async.
+        '202':
+          description: "Updates to repos successful"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/ResourceNotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      tags: [content]
+
+  /operations/list_orgs:
+    get:
+      summary: "Lists all of the organizations which are available to the specified user account."
+      operationId: listOrgs
+      security:
+        - basicAuth: []
+        - certAuth: []
+      responses:
+        # Could be 202 Accepted if we go async.
+        '200':
+          $ref: '#/components/responses/ListOrgsResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/ResourceNotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      tags: [environment]
+
+  /operations/list_repo_overrides:
+    get:
+      summary: "Lists all overrides from repositories specified with the repo option."
+      operationId: listRepoOverrides
+      security:
+        - certAuth: []
+      parameters:
+        - name: consumer_id
+          in: query
+          schema:
+            type: string
+        - name: repo
+          in: query
+          description: The repositories to list repo overrides for
+          schema:
+            type: array
+            items:
+              type: string
+      responses:
+        # Could be 202 Accepted if we go async.
+        '200':
+          $ref: '#/components/responses/ListOverridesResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/ResourceNotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      tags: [content]
+
+  /operations/update_repo_overrides:
+    post:
+      summary: "Allows the user to manage custom content repository settings."
+      operationId: updateRepoOverrides
+      security:
+        - certAuth: []
+      parameters:
+        - name: consumer_id
+          in: query
+          schema:
+            type: string
+        - name: repo
+          in: query
+          description: The repositories to update repo overrides for
+          schema:
+            type: array
+            items:
+              type: string
+        - name: add
+          in: query
+          description: Adds a named override with the provided value to repositories specified with the repo option (NAME:VALUE)
+          schema:
+            type: array
+            items:
+              type: string
+        - name: remove
+          in: query
+          description: Removes a named override from the repositories specified.
+          schema:
+            type: array
+            items:
+              type: string
+        - name: removeall
+          in: query
+          description: Removes all overrides from repositories specified.
+          schema:
+            type: boolean
+      responses:
+        # Could be 202 Accepted if we go async.
+        '202':
+          description: "Update to repos successful"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/ResourceNotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      tags: [content]
+
+  /operations/regenerate_identity:
+    post:
+      summary: "Requests that the subscription management service issue a new identity certificate for the system, using an existing UUID in the original identity certificate."
+      operationId: regenerateIdentity
+      security:
+        - basicAuth: []
+        - certAuth: []
+      parameters:
+        - name: consumer_id
+          in: query
+          schema:
+            type: string
+      responses:
+        # Could be 202 Accepted if we go async.
+        '200':
+          $ref: '#/components/responses/SyncResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/ResourceNotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      tags: [registration]
+
+  /operations/update_profile:
+    post:
+      summary: "Updates the system information."
+      operationId: updateProfile
+      security:
+        - certAuth: []
+      parameters:
+        - name: consumer_id
+          in: query
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/vnd.api+json:
+            schema:
+              $ref: '#/components/schemas/SystemProfile'
+      responses:
+        # Could be 202 Accepted if we go async.
+        '200':
+          $ref: '#/components/responses/UpdateProfileResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/ResourceNotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      tags: [profile]
+
+  /operations/get_version:
+    get:
+      summary: "Displays information about the subscription management server."
+      operationId: getVersion
+      responses:
+        '200':
+          $ref: '#/components/responses/VersionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/ResourceNotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      tags: [info]
+
+  /operations/get_status:
+    get:
+      summary: "Displays shows the current status of the products and attached subscriptions for the system."
+      operationId: getStatus
+      security:
+        - certAuth: []
+      parameters:
+        - name: consumer_id
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          $ref: '#/components/responses/StatusResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/ResourceNotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      tags: [subscriptions]
+
+  /openapi.json:
+    get:
+      description: "Get the OpenAPI spec in JSON format."
+      operationId: getOpenApiJson
+      tags:
+        - root
+      responses:
+        '200':
+          description: "The request to get the OpenAPI JSON was successful."
+          content:
+            application/json:
+              schema:
+                type: string
+
+  /openapi.yaml:
+    get:
+      description: "Get the OpenAPI spec in YAML format."
+      operationId: getOpenApiYaml
+      tags:
+        - root
+      responses:
+        '200':
+          description: "The request to get the OpenAPI YAML was successful."
+          content:
+            application/x-yaml:
+              schema:
+                type: string
+
+components:
+  responses:
+    SyncResponse:
+      description: "Successful registration."
+      content:
+        application/vnd.api+json:
+          schema:
+            $ref: '#/components/schemas/SyncResult'
+
+    ListReleasesResponse:
+      description: "List releases response."
+      content:
+        application/vnd.api+json:
+          schema:
+            $ref: '#/components/schemas/ListReleasesResult'
+
+    ListServiceLevelsResponse:
+      description: "List service-levels response."
+      content:
+        application/vnd.api+json:
+          schema:
+            $ref: '#/components/schemas/ListServiceLevelsResult'
+
+    ListPoolsResponse:
+      description: 'List of matching pools'
+      content:
+        application/vnd.api+json:
+          schema:
+            $ref: '#/components/schemas/ListPoolsResult'
+
+    ListPoolIdsResponse:
+      description: 'List of matching pool IDs'
+      content:
+        application/vnd.api+json:
+          schema:
+            $ref: '#/components/schemas/ListPoolIdsResult'
+
+    StatusResponse:
+      description: "Subscription status"
+      content:
+        application/vnd.api+json:
+          schema:
+            $ref: '#/components/schemas/SubscriptionStatus'
+
+    VersionResponse:
+      description: "Candlepin version info"
+      content:
+        application/vnd.api+json:
+          schema:
+            $ref: '#/components/schemas/CandlepinVersion'
+
+    UpdateProfileResponse:
+      description: "Response to updated profile"
+      content:
+        application/vnd.api+json:
+          schema:
+            $ref: '#/components/schemas/SyncResult'
+
+    ListEnvironmentsResponse:
+      description: 'List of available environments'
+      content:
+        application/vnd.api+json:
+          schema:
+            type: array
+            items:
+              type: string
+
+    ListReposResponse:
+      description: 'List of repos'
+      content:
+        application/vnd.api+json:
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/Repo'
+
+    ListOrgsResponse:
+      description: 'List of available orgs'
+      content:
+        application/vnd.api+json:
+          schema:
+            type: array
+            items:
+              type: string
+
+    ListOverridesResponse:
+      description: 'List of repo-overrides'
+      content:
+        application/vnd.api+json:
+          schema:
+            type: array
+            items:
+              type: string
+
+    InternalServerError:
+      description: "An internal server error has occurred and is not recoverable."
+      content:
+        application/vnd.api+json:
+          schema:
+            $ref: "#/components/schemas/Errors"
+
+    BadRequest:
+      description: "The server could could not process the current request."
+      content:
+        application/vnd.api+json:
+          schema:
+            $ref: "#/components/schemas/Errors"
+
+    Forbidden:
+      description: "The request was valid, but the request was refused by the server."
+      content:
+        application/vnd.api+json:
+          schema:
+            $ref: "#/components/schemas/Errors"
+
+    ResourceNotFound:
+      description: "The requested resource was not found."
+      content:
+        application/vnd.api+json:
+          schema:
+            $ref: "#/components/schemas/Errors"
+
+    ServiceUnavailable:
+      description: "The server is currently unavailable."
+      content:
+        application/vnd.api+json:
+          schema:
+            $ref: "#/components/schemas/Errors"
+
+  schemas:
+    SyncResult:
+      properties:
+        consumer:
+          $ref: '#/components/schemas/Consumer'
+        identityCertificate:
+          $ref: '#/components/schemas/Certificate'
+        addedEntitlementCertificates:
+          type: array
+          items:
+            $ref: '#/components/schemas/Certificate'
+        addedRepos:
+          type: array
+          items:
+            $ref: '#/components/schemas/Repo'
+        removedEntitlementCertificateIds:
+          type: array
+          items:
+            type: string
+        release:
+          type: string
+        state_token:
+          type: string
+        subscription_status:
+          $ref: '#/components/schemas/SubscriptionStatus'
+        system_purpose:
+          $ref: '#/components/schemas/SystemPurpose'
+
+    Certificate:
+      properties:
+        certificate:
+          type: string
+        key:
+          type: string
+
+    Consumer:
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        org_name:
+          type: string
+        org_id:
+          type: string
+
+    SystemProfile:
+      properties:
+        facts:
+          type: object
+          additionalProperties:
+            type: string
+        enabled_repos:
+          type: array
+          items:
+            type: string
+        installed_packages:
+          type: array
+          items:
+            $ref: '#/components/schemas/SoftwarePackage'
+        installed_products:
+          type: array
+          items:
+            $ref: '#/components/schemas/InstalledProduct'
+        installed_tags:
+          type: array
+          items:
+            type: string
+        module_profile:
+          type: array
+          items:
+            $ref: '#/components/schemas/Module'
+        release:
+          type: string
+        system_purpose:
+          $ref: '#/components/schemas/SystemPurpose'
+
+    SystemPurpose:
+      properties:
+        role:
+          type: string
+        addons:
+          type: array
+          items:
+            type: string
+        usage:
+          type: string
+        sla:
+          type: string
+
+    SoftwarePackage:
+      properties:
+        name:
+          type: string
+        version:
+          type: string
+        release:
+          type: string
+        arch:
+          type: string
+        epoch:
+          type: string
+
+    InstalledProduct:
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        version:
+          type: string
+        arch:
+          type: string
+
+    Module:
+      properties:
+        name:
+          type: string
+        stream:
+          type: string
+        version:
+          type: string
+        context:
+          type: string
+        arch:
+          type: string
+        profiles:
+          type: array
+          items:
+            type: string
+        installed_profiles:
+          type: array
+          items:
+            type: string
+        status:
+          type: string
+
+    CandlepinVersion:
+      properties:
+        server_version:
+          type: string
+        server_release:
+          type: string
+        rules_version:
+          type: string
+
+    ListReleasesResult:
+      properties:
+        current_release:
+          type: string
+        available_releases:
+          type: array
+          items:
+            type: string
+
+    ListServiceLevelsResult:
+      properties:
+        current_service_level:
+          type: string
+        available_service_levels:
+          type: array
+          items:
+            type: string
+
+    ListPoolsResult:
+      type: array
+      items:
+        $ref: '#/components/schemas/Pool'
+
+    ListPoolIdsResult:
+      type: array
+      items:
+        type: string
+
+    Pool:
+      properties:
+        id:
+          type: string
+
+    Repo:
+      properties:
+        id:
+          type: string
+        attributes:
+          type: object
+          additionalProperties:
+            type: string
+
+    SubscriptionStatus:
+      properties:
+        overall_status:
+          type: string
+        products:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductStatus'
+
+    ProductStatus:
+      properties:
+        product:
+          type: string
+        status:
+          type: string
+
+    Errors:
+      required:
+        - errors
+      properties:
+        errors:
+          type: array
+          items:
+            $ref: "#/components/schemas/Error"
+
+    Error:
+      required:
+        - status
+        - code
+        - title
+      properties:
+        status:
+          type: string
+        code:
+          type: string
+        title:
+          type: string
+        detail:
+          type: string
+
+  securitySchemes:
+    basicAuth:
+      type: http
+      scheme: basic
+    certAuth:
+      type: http
+      scheme: rhsmId
