@@ -14,6 +14,7 @@
  */
 package org.candlepin.resteasy.filter;
 
+import org.candlepin.api.v3.resources.OperationsApi;
 import org.candlepin.auth.KeycloakAuth;
 import org.candlepin.auth.AuthProvider;
 import org.candlepin.common.auth.SecurityHole;
@@ -39,6 +40,8 @@ import org.jboss.resteasy.spi.ResteasyProviderFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import io.swagger.annotations.ApiOperation;
+import io.swagger.annotations.Authorization;
 import io.swagger.jaxrs.listing.ApiListingResource;
 
 import java.io.IOException;
@@ -106,6 +109,7 @@ public class AuthenticationFilter implements ContainerRequestFilter {
         }
         // consumer certificates
         if (config.getBoolean(ConfigProperties.SSL_AUTHENTICATION)) {
+            log.info("adding ssl provider!");
             providers.add(injector.getInstance(SSLAuth.class));
         }
         // trusted headers
@@ -125,7 +129,16 @@ public class AuthenticationFilter implements ContainerRequestFilter {
         Method method = resourceInfo.getResourceMethod();
 
         SecurityHole hole = method.getAnnotation(SecurityHole.class);
+        ApiOperation swaggerOperation = method.getAnnotation(ApiOperation.class);
         Principal principal = null;
+
+        if (method.getDeclaringClass().isAssignableFrom(OperationsApi.class)) {
+            log.info("new resource!");
+            if (swaggerOperation.authorizations().length == 0) {
+                principal = new NoAuthPrincipal();
+                log.info("no auth here!");
+            }
+        }
 
         if (hole != null && hole.anon()) {
             principal = new NoAuthPrincipal();
@@ -134,12 +147,13 @@ public class AuthenticationFilter implements ContainerRequestFilter {
             log.debug("Swagger API request made; no principal required.");
             principal = new NoAuthPrincipal();
         }
-        else {
+        else if (principal == null) {
             for (AuthProvider provider : providers) {
+                log.info("Trying provider {}", provider.getClass().getName());
                 principal = provider.getPrincipal(httpRequest);
 
                 if (principal != null) {
-                    log.debug("Establishing principal with {}", provider.getClass().getName());
+                    log.info("Establishing principal with {}", provider.getClass().getName());
                     break;
                 }
             }
@@ -164,6 +178,7 @@ public class AuthenticationFilter implements ContainerRequestFilter {
         requestContext.setSecurityContext(securityContext);
 
         // Push the principal into the context for the PrincipalProvider to access directly
+        log.info("have principal! {}", principal);
         ResteasyProviderFactory.pushContext(Principal.class, principal);
     }
 

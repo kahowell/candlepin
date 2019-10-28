@@ -55,7 +55,7 @@ public class SSLAuth extends ConsumerAuth {
 
         if (certs == null || certs.length < 1) {
             if (log.isDebugEnabled()) {
-                log.debug("no certificate was present to authenticate the client");
+                log.info("no certificate was present to authenticate the client");
             }
 
             return null;

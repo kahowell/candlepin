@@ -123,6 +123,8 @@ import org.candlepin.resource.EnvironmentResource;
 import org.candlepin.resource.GuestIdResource;
 import org.candlepin.resource.HypervisorResource;
 import org.candlepin.resource.JobResource;
+import org.candlepin.resource.OpenApiResource;
+import org.candlepin.resource.OperationsResource;
 import org.candlepin.resource.OwnerContentResource;
 import org.candlepin.resource.OwnerProductResource;
 import org.candlepin.resource.OwnerResource;
@@ -331,6 +333,8 @@ public class CandlepinModule extends AbstractModule {
         bind(DeletedConsumerResource.class);
         bind(CdnResource.class);
         bind(GuestIdResource.class);
+        bind(OperationsResource.class);
+        bind(OpenApiResource.class);
     }
 
     private void miscConfigurations() {
